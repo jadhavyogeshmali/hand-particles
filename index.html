@@ -1,165 +1,86 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Mobile Hand Particle System</title>
+<meta charset="UTF-8" />
+<title>Galaxy Particles</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body { margin:0; overflow:hidden; background:black; }
-  video { display:none; }
+body { margin:0; overflow:hidden; background:black; }
+canvas { display:block; }
+#msg {
+  position: fixed;
+  top: 10px;
+  width: 100%;
+  text-align: center;
+  color: white;
+  font-family: sans-serif;
+  opacity: 0.7;
+}
 </style>
 </head>
 <body>
+<div id="msg">Move finger to rotate • Pinch to zoom</div>
 
-<video id="video" autoplay playsinline></video>
-
-<script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
 <script>
-/* ---------------- THREE SETUP ---------------- */
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 1, 500);
+let scene = new THREE.Scene();
+let camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
 camera.position.z = 120;
 
-const renderer = new THREE.WebGLRenderer({ antialias:true });
+let renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.AmbientLight(0xffffff, 1));
+// Galaxy particles
+let count = 8000;
+let geometry = new THREE.BufferGeometry();
+let positions = new Float32Array(count * 3);
+let colors = new Float32Array(count * 3);
 
-/* ---------------- PARTICLES ---------------- */
-const COUNT = 12000; // mobile safe
-const geometry = new THREE.BufferGeometry();
-const positions = new Float32Array(COUNT * 3);
-geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+for (let i = 0; i < count; i++) {
+  let r = Math.random() * 50;
+  let angle = r * 0.3;
+  positions[i*3] = Math.cos(angle) * r;
+  positions[i*3+1] = (Math.random()-0.5) * 5;
+  positions[i*3+2] = Math.sin(angle) * r;
 
-const material = new THREE.PointsMaterial({
-  size: 1.6,
-  color: 0xff44ff,
-  transparent:true,
-  blending:THREE.AdditiveBlending
-});
-
-const particles = new THREE.Points(geometry, material);
-scene.add(particles);
-
-/* ---------------- SHAPES ---------------- */
-let shapeIndex = 0;
-
-function heart() {
-  for(let i=0;i<positions.length;i+=3){
-    const t = Math.random()*Math.PI*2;
-    positions[i]   = 16*Math.pow(Math.sin(t),3);
-    positions[i+1] = 13*Math.cos(t)-5*Math.cos(2*t);
-    positions[i+2] = (Math.random()-0.5)*10;
-  }
+  colors[i*3] = 0.6 + Math.random()*0.4;
+  colors[i*3+1] = 0.2;
+  colors[i*3+2] = 1;
 }
 
-function flower() {
-  for(let i=0;i<positions.length;i+=3){
-    const a = Math.random()*Math.PI*2;
-    const r = 30*Math.sin(5*a);
-    positions[i] = r*Math.cos(a);
-    positions[i+1] = r*Math.sin(a);
-    positions[i+2] = (Math.random()-0.5)*20;
-  }
-}
+geometry.setAttribute('position', new THREE.BufferAttribute(positions,3));
+geometry.setAttribute('color', new THREE.BufferAttribute(colors,3));
 
-function saturn() {
-  for(let i=0;i<positions.length;i+=3){
-    const a = Math.random()*Math.PI*2;
-    positions[i] = 40*Math.cos(a);
-    positions[i+1] = (Math.random()-0.5)*5;
-    positions[i+2] = 40*Math.sin(a);
-  }
-}
-
-function fireworks() {
-  for(let i=0;i<positions.length;i+=3){
-    const r = Math.random()*50;
-    const a = Math.random()*Math.PI*2;
-    positions[i] = r*Math.cos(a);
-    positions[i+1] = r*Math.sin(a);
-    positions[i+2] = (Math.random()-0.5)*50;
-  }
-}
-
-const shapes = [heart, flower, saturn, fireworks];
-shapes[0]();
-geometry.attributes.position.needsUpdate = true;
-
-function switchShape() {
-  shapeIndex = (shapeIndex + 1) % shapes.length;
-  shapes[shapeIndex]();
-  geometry.attributes.position.needsUpdate = true;
-}
-
-/* ---------------- HAND TRACKING ---------------- */
-const video = document.getElementById("video");
-
-const hands = new Hands({
-  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+let material = new THREE.PointsMaterial({
+  size: 0.8,
+  vertexColors: true
 });
 
-hands.setOptions({
-  maxNumHands:1,
-  modelComplexity:0, // mobile optimized
-  minDetectionConfidence:0.6,
-  minTrackingConfidence:0.6
+let galaxy = new THREE.Points(geometry, material);
+scene.add(galaxy);
+
+// Touch control
+let lastX = 0;
+window.addEventListener("touchmove", e=>{
+  let x = e.touches[0].clientX;
+  galaxy.rotation.y += (x-lastX)*0.0005;
+  lastX = x;
 });
 
-hands.onResults(res=>{
-  if(!res.multiHandLandmarks.length) return;
-
-  const h = res.multiHandLandmarks[0];
-  const thumb = h[4];
-  const index = h[8];
-
-  const pinch = Math.hypot(
-    thumb.x-index.x,
-    thumb.y-index.y
-  ) < 0.05;
-
-  if(pinch) switchShape();
-
-  particles.scale.setScalar(1 + (0.5 - h[9].y));
-  material.color.setHSL(index.x, 1, 0.6);
-});
-
-const cam = new Camera(video,{
-  onFrame: async()=> await hands.send({image:video}),
-  width:640,
-  height:480
-});
-cam.start();
-
-/* ---------------- TOUCH SUPPORT ---------------- */
-let startX = 0;
-window.addEventListener("touchstart", e=>{
-  startX = e.touches[0].clientX;
-});
-
-window.addEventListener("touchend", e=>{
-  if(Math.abs(e.changedTouches[0].clientX - startX) > 50){
-    switchShape();
-  }
-});
-
-/* ---------------- ANIMATE ---------------- */
 function animate(){
   requestAnimationFrame(animate);
-  particles.rotation.y += 0.002;
+  galaxy.rotation.y += 0.001;
   renderer.render(scene,camera);
 }
 animate();
 
-window.addEventListener("resize", ()=>{
+window.addEventListener("resize",()=>{
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
 </script>
 </body>
-</html>
+</html> 
